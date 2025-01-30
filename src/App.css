@@ -1,0 +1,149 @@
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background-color: #eef2f7;
+  color: #333;
+  overflow-x: hidden;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  padding: 80px 20px;
+}
+
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(90deg, #6a0dad, #4c51bf);
+  color: white;
+  padding: 15px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.wallet-info {
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+}
+
+.connect-btn {
+  background: linear-gradient(90deg, #6a0dad, #4c51bf);
+  color: white;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.2s, background 0.3s ease;
+}
+
+.connect-btn:hover {
+  transform: scale(1.05);
+  background: linear-gradient(90deg, #5b0b8a, #3b42a6);
+}
+
+.content {
+  width: auto;
+  /* max-width: 800px; */
+  padding: 20px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  text-align: center;
+}
+
+.tokens {
+  margin-top: 20px;
+  width: 100%;
+}
+
+.tokens-table, .highlighted-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.tokens-table th, .tokens-table td, .highlighted-table th, .highlighted-table td {
+  border: 1px solid #ddd;
+  padding: 12px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.tokens-table th {
+  background-color: #4c51bf;
+  color: white;
+  font-weight: bold;
+}
+
+.tokens-table tr:nth-child(even) {
+  background-color: #f9fafb;
+}
+
+.tokens-table tr:hover {
+  background-color: #edf2ff;
+}
+
+.highlighted-table {
+  margin-bottom: 20px;
+}
+
+.highlighted-table td {
+  background-color: #fffae6;
+  font-weight: bold;
+}
+
+/* Ensuring alignment between all tables */
+.tokens-table, .highlighted-table {
+  table-layout: fixed; /* This ensures that the column widths remain consistent */
+}
+
+.tokens-table th, .highlighted-table th, .tokens-table td, .highlighted-table td {
+  word-wrap: break-word;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: Adds a slight shadow around the table */
+}
+
+.transactions-table th, .transactions-table td {
+  border: 1px solid #ddd; /* Adds a light gray border to the cells */
+  padding: 12px;
+  text-align: center;
+  font-size: 16px;
+}
+
+.transactions-table th {
+  background-color: #4c51bf; /* Header background color */
+  color: white;
+  font-weight: bold;
+}
+
+.transactions-table tr:nth-child(even) {
+  background-color: #f9fafb; /* Striped rows */
+}
+
+.transactions-table tr:hover {
+  background-color: #edf2ff; /* Highlight row on hover */
+}
+
+/* Optional: Styling for the wrapper around the table */
+.table-wrapper {
+  overflow-x: auto;
+}
+
