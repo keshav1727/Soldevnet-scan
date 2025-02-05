@@ -1,6 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+
 import { Connection, PublicKey } from "@solana/web3.js";
+import { createJupiterApiClient } from "@jup-ag/api";
 import './App.css'; 
+
+const SOLANA_MAINNET = "https://api.mainnet-beta.solana.com";
+
 
 const App = () => {
   const [walletAddress, setWalletAddress] = useState(null);
@@ -9,6 +14,33 @@ const App = () => {
   const [error, setError] = useState("");
   const [transactions, setTransactions] = useState([]);
   const [searchedTransactions, setSearchedTransactions] = useState([]);
+  const [jupiterApiClient, setJupiterApiClient] = useState(null);
+
+  const validMintAddresses = {
+    "SOL": "So11111111111111111111111111111111111111112",
+    "USDC": "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A",
+    "wETH": "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp"
+};
+
+
+  // Swap States
+  const [inputMint, setInputMint] = useState("So11111111111111111111111111111111111111112"); // Default SOL
+  const [outputMint, setOutputMint] = useState(""); // User selected output token
+  const [amount, setAmount] = useState("");
+
+  // Initialize Jupiter API Client
+  useEffect(() => {
+    const initJupiterClient = async () => {
+        try {
+            const client = createJupiterApiClient();
+            setJupiterApiClient(client);
+        } catch (error) {
+            console.error("Error initializing Jupiter API client:", error);
+        }
+    };
+    initJupiterClient();
+}, []);
+
 
   const connectWallet = async () => {
     try {
@@ -32,7 +64,7 @@ const App = () => {
 
   const fetchTransactions = async (address) => {
     try {
-      const connection = new Connection("https://api.devnet.solana.com", "confirmed");
+      const connection = new Connection(SOLANA_MAINNET, "confirmed");
       const publicKey = new PublicKey(address);
   
       const signatures = await connection.getSignaturesForAddress(publicKey, { limit: 5 });
@@ -57,45 +89,44 @@ const App = () => {
   };
 
   const fetchTokens = async (address) => {
-    const connection = new Connection("https://api.devnet.solana.com");
+    const connection = new Connection(SOLANA_MAINNET);
     const tokensList = [];
 
     try {
-      const solBalance = await connection.getBalance(new PublicKey(address));
-      tokensList.push({ name: "SOL", amount: (solBalance / 10 ** 9).toFixed(4) });
-
-      const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-        new PublicKey(address),
-        {
-          programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+        const solBalance = await connection.getBalance(new PublicKey(address));
+        if (solBalance > 0) {
+            tokensList.push({ name: "SOL", mint: "So11111111111111111111111111111111111111112", amount: (solBalance / 10 ** 9).toFixed(4) });
         }
-      );
 
-      tokenAccounts.value.forEach((account) => {
-        const tokenInfo = account.account.data.parsed.info;
-        const tokenAmount = tokenInfo.tokenAmount.uiAmount || 0;
-        const mintAddress = tokenInfo.mint;
+        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+            new PublicKey(address),
+            {
+                programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
+            }
+        );
 
-        tokensList.push({
-          name: mintAddress, 
-          amount: tokenAmount.toFixed(4),
+        tokenAccounts.value.forEach((account) => {
+            const tokenInfo = account.account.data.parsed.info;
+            const tokenAmount = tokenInfo.tokenAmount.uiAmount || 0;
+            const mintAddress = tokenInfo.mint;
+
+            if (tokenAmount > 0) { // Only show tokens with a balance
+                tokensList.push({
+                    name: mintAddress, 
+                    mint: mintAddress,
+                    amount: tokenAmount.toFixed(4),
+                });
+            }
         });
-      });
 
-      const knownTokens = ["SOL", "ETH", "USDC", "Polygon", "BNB"];
-      knownTokens.forEach((token) => {
-        if (!tokensList.find((t) => t.name === token)) {
-          tokensList.push({ name: token, amount: "0.0000" });
-        }
-      });
-
-      tokensList.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
-      setTokens(tokensList);
+        // Sort tokens from highest to lowest balance
+        tokensList.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
+        setTokens(tokensList);
     } catch (err) {
-      console.error("Error fetching tokens:", err);
-      setError("Error fetching token balances. Please try again later.");
+        console.error("Error fetching tokens:", err);
+        setError("Error fetching token balances. Please try again later.");
     }
-  };
+};
 
   const handleSearch = async () => {
     if (searchedAddress.trim() !== "") {
@@ -103,6 +134,73 @@ const App = () => {
       setSearchedTransactions(searchedTxns);
     }
   };
+
+  const handleSwap = async () => {
+    console.log("Starting Swap...");
+    console.log("Input Mint:", inputMint);
+    console.log("Output Mint:", outputMint);
+    console.log("Amount:", amount);
+
+    if (!walletAddress) {
+        setError("Please connect your wallet first.");
+        console.log("Error: Wallet not connected.");
+        return;
+    }
+    if (!inputMint || !outputMint || !amount) {
+        setError("Please fill all swap fields.");
+        console.log("Error: Swap fields empty.");
+        return;
+    }
+    if (!jupiterApiClient) {
+        setError("Jupiter API client is not initialized.");
+        console.log("Error: Jupiter API client missing.");
+        return;
+    }
+
+    // Ensure the outputMint is a valid Solana Token Mint Address
+    const validMintAddresses = {
+        "SOL": "So11111111111111111111111111111111111111112",
+        "USDC": "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A",
+        "wETH": "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp"
+    };
+
+    if (!validMintAddresses[inputMint] || !validMintAddresses[outputMint]) {
+        setError("Invalid token selection.");
+        console.log("Error: Invalid token mint selected.");
+        return;
+    }
+
+    try {
+        console.log("Fetching best swap route...");
+
+        // Convert amount correctly (adjusting for decimals)
+        let decimals = 9; // Default to 9 decimals (SOL)
+        if (outputMint === "USDC") decimals = 6; // USDC uses 6 decimals
+
+        const formattedAmount = (parseFloat(amount) * Math.pow(10, decimals)).toString();
+
+        const quoteResponse = await jupiterApiClient.quoteGet({
+            inputMint: validMintAddresses[inputMint],
+            outputMint: validMintAddresses[outputMint],
+            amount: formattedAmount, // Corrected amount format
+        });
+
+        if (!quoteResponse.data || quoteResponse.data.length === 0) {
+            setError("No available swap routes for the selected tokens.");
+            console.log("Error: No swap routes found.");
+            return;
+        }
+
+        const bestRoute = quoteResponse.data[0];
+        console.log("Best route found:", bestRoute);
+        alert(`Best swap route found! Price Impact: ${bestRoute.priceImpactPct}`);
+    } catch (err) {
+        console.error("Jupiter API Error:", err);
+        setError("Failed to fetch swap route. Please try again.");
+    }
+};
+
+
 
   const highestToken = tokens[0]; // First token in the sorted list
   const remainingTokens = tokens.slice(1); // All other tokens
@@ -173,6 +271,41 @@ const App = () => {
             )}
           </div>
         )}
+{walletAddress && (
+    <div className="swap-section">
+        <h3>Swap Tokens</h3>
+
+        <label>Select Token to Swap From:</label>
+<select value={inputMint} onChange={(e) => setInputMint(e.target.value)}>
+    {tokens.map((token, index) => (
+        <option key={index} value={token.mint}>
+            {token.name} ({token.amount})
+        </option>
+    ))}
+</select>
+
+<label>Select Token to Swap To:</label>
+<select value={outputMint} onChange={(e) => setOutputMint(e.target.value)}>
+    {tokens.filter(token => token.mint !== inputMint).map((token, index) => (
+        <option key={index} value={token.mint}>
+            {token.name} ({token.amount})
+        </option>
+    ))}
+</select>
+
+
+        <label>Amount to Swap:</label>
+        <input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="Enter amount"
+        />
+
+        <button className="swap-btn" onClick={handleSwap}>Find Best Swap</button>
+    </div>
+)}
+
 
         {/* Display Transactions for Connected Wallet */}
         {walletAddress && transactions.length > 0 && (
