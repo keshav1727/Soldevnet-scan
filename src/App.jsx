@@ -2,9 +2,11 @@ import React, { useState, useEffect } from "react";
 
 import { Connection, PublicKey } from "@solana/web3.js";
 import { createJupiterApiClient } from "@jup-ag/api";
+import { Transaction } from "@solana/web3.js";
+
 import './App.css'; 
 
-const SOLANA_MAINNET = "https://api.mainnet-beta.solana.com";
+const SOLANA_MAINNET = "https://mainnet.helius-rpc.com/?api-key=b3cb3faa-2f54-43d8-ba4e-483089666126";
 
 
 const App = () => {
@@ -91,42 +93,70 @@ const App = () => {
   const fetchTokens = async (address) => {
     const connection = new Connection(SOLANA_MAINNET);
     const tokensList = [];
-
+  
+    // ✅ Mapping for mint to readable token name
+    const mintToName = {
+      "So11111111111111111111111111111111111111112": "SOL",
+      "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A": "USDC",
+      "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp": "wETH",
+      // Add more known tokens if needed
+    };
+  
     try {
-        const solBalance = await connection.getBalance(new PublicKey(address));
-        if (solBalance > 0) {
-            tokensList.push({ name: "SOL", mint: "So11111111111111111111111111111111111111112", amount: (solBalance / 10 ** 9).toFixed(4) });
+      // ✅ SOL Balance
+      const solBalance = await connection.getBalance(new PublicKey(address));
+      tokensList.push({
+        name: "SOL",
+        mint: "So11111111111111111111111111111111111111112",
+        amount: (solBalance / 10 ** 9).toFixed(4),
+      });
+  
+      // ✅ Get all SPL token accounts (including 0 balance if ATA exists)
+      const response = await connection.getParsedTokenAccountsByOwner(
+        new PublicKey(address),
+        {
+          programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
         }
-
-        const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-            new PublicKey(address),
-            {
-                programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-            }
-        );
-
-        tokenAccounts.value.forEach((account) => {
-            const tokenInfo = account.account.data.parsed.info;
-            const tokenAmount = tokenInfo.tokenAmount.uiAmount || 0;
-            const mintAddress = tokenInfo.mint;
-
-            if (tokenAmount > 0) { // Only show tokens with a balance
-                tokensList.push({
-                    name: mintAddress, 
-                    mint: mintAddress,
-                    amount: tokenAmount.toFixed(4),
-                });
-            }
+      );
+  
+      const fetchedMints = [];
+  
+      response.value.forEach((account) => {
+        const tokenInfo = account.account.data.parsed.info;
+        const mint = tokenInfo.mint;
+        const amount = tokenInfo.tokenAmount.uiAmount || 0;
+  
+        tokensList.push({
+          name: mintToName[mint] || mint,
+          mint: mint,
+          amount: amount.toFixed(4),
         });
-
-        // Sort tokens from highest to lowest balance
-        tokensList.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
-        setTokens(tokensList);
+  
+        fetchedMints.push(mint);
+      });
+  
+      // ✅ Ensure known tokens are included even if not in wallet (0 balance)
+      for (const [mint, name] of Object.entries(mintToName)) {
+        if (!fetchedMints.includes(mint) && mint !== "So11111111111111111111111111111111111111112") {
+          tokensList.push({
+            name,
+            mint,
+            amount: "0.0000",
+          });
+        }
+      }
+  
+      // ✅ Sort by amount descending
+      tokensList.sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount));
+  
+      setTokens(tokensList);
     } catch (err) {
-        console.error("Error fetching tokens:", err);
-        setError("Error fetching token balances. Please try again later.");
+      console.error("Error fetching tokens:", err);
+      setError("Error fetching token balances.");
     }
-};
+  };
+  
+  
 
   const handleSearch = async () => {
     if (searchedAddress.trim() !== "") {
@@ -136,70 +166,78 @@ const App = () => {
   };
 
   const handleSwap = async () => {
-    console.log("Starting Swap...");
-    console.log("Input Mint:", inputMint);
-    console.log("Output Mint:", outputMint);
-    console.log("Amount:", amount);
-
     if (!walletAddress) {
-        setError("Please connect your wallet first.");
-        console.log("Error: Wallet not connected.");
-        return;
+      setError("Please connect your wallet first.");
+      return;
     }
     if (!inputMint || !outputMint || !amount) {
-        setError("Please fill all swap fields.");
-        console.log("Error: Swap fields empty.");
-        return;
+      setError("Please fill all swap fields.");
+      return;
     }
     if (!jupiterApiClient) {
-        setError("Jupiter API client is not initialized.");
-        console.log("Error: Jupiter API client missing.");
-        return;
+      setError("Jupiter API client is not initialized.");
+      return;
     }
-
-    // Ensure the outputMint is a valid Solana Token Mint Address
-    const validMintAddresses = {
-        "SOL": "So11111111111111111111111111111111111111112",
-        "USDC": "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A",
-        "wETH": "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp"
-    };
-
-    if (!validMintAddresses[inputMint] || !validMintAddresses[outputMint]) {
-        setError("Invalid token selection.");
-        console.log("Error: Invalid token mint selected.");
-        return;
-    }
-
+  
     try {
-        console.log("Fetching best swap route...");
-
-        // Convert amount correctly (adjusting for decimals)
-        let decimals = 9; // Default to 9 decimals (SOL)
-        if (outputMint === "USDC") decimals = 6; // USDC uses 6 decimals
-
-        const formattedAmount = (parseFloat(amount) * Math.pow(10, decimals)).toString();
-
-        const quoteResponse = await jupiterApiClient.quoteGet({
-            inputMint: validMintAddresses[inputMint],
-            outputMint: validMintAddresses[outputMint],
-            amount: formattedAmount, // Corrected amount format
-        });
-
-        if (!quoteResponse.data || quoteResponse.data.length === 0) {
-            setError("No available swap routes for the selected tokens.");
-            console.log("Error: No swap routes found.");
-            return;
+      const connection = new Connection(SOLANA_MAINNET);
+      let decimals = 9;
+  
+      if (inputMint !== validMintAddresses["SOL"]) {
+        try {
+          const tokenInfo = await connection.getParsedAccountInfo(new PublicKey(inputMint));
+          const tokenData = tokenInfo.value?.data?.parsed?.info;
+          decimals = tokenData?.decimals || 9;
+        } catch (error) {
+          console.warn("Defaulting to 9 decimals.");
         }
-
-        const bestRoute = quoteResponse.data[0];
-        console.log("Best route found:", bestRoute);
-        alert(`Best swap route found! Price Impact: ${bestRoute.priceImpactPct}`);
-    } catch (err) {
-        console.error("Jupiter API Error:", err);
-        setError("Failed to fetch swap route. Please try again.");
+      }
+  
+      const formattedAmount = (parseFloat(amount) * Math.pow(10, decimals)).toString();
+  
+      const quote = await jupiterApiClient.quoteGet({
+        inputMint,
+        outputMint,
+        amount: formattedAmount,
+        slippage: 1, // 1% slippage
+      });
+  
+      const routes = Array.isArray(quote) ? quote : quote.data;
+  
+      if (!routes || routes.length === 0) {
+        setError("No swap route found.");
+        return;
+      }
+  
+      const bestRoute = routes[0];
+  
+      // Fetch swap transaction
+      const swapResponse = await jupiterApiClient.swapPost({
+        route: bestRoute,
+        userPublicKey: walletAddress,
+      });
+  
+      const { swapTransaction } = swapResponse;
+  
+      const transaction = Transaction.from(Buffer.from(swapTransaction, "base64"));
+      transaction.feePayer = new PublicKey(walletAddress);
+  
+      transaction.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+  
+      const { solana } = window;
+      const signedTx = await solana.signTransaction(transaction);
+      const txid = await connection.sendRawTransaction(signedTx.serialize());
+  
+      await connection.confirmTransaction(txid, "confirmed");
+  
+      alert(`Swap successful! Tx ID: ${txid}`);
+    } catch (error) {
+      console.error("Swap failed:", error);
+      setError("Swap failed. Please try again.");
     }
-};
-
+  };
+  
+  
 
 
   const highestToken = tokens[0]; // First token in the sorted list
@@ -224,6 +262,7 @@ const App = () => {
 
         {/* Search bar */}
         <div className="search-section">
+        <h3>Search for Last 5 transaction using your wallet address</h3>
           <input
             type="text"
             className="search-input"
@@ -231,6 +270,7 @@ const App = () => {
             value={searchedAddress}
             onChange={(e) => setSearchedAddress(e.target.value)}
           />
+
           <button className="search-btn" onClick={handleSearch}>Search</button>
         </div>
 
