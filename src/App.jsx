@@ -8,6 +8,10 @@ import { createJupiterApiClient } from "@jup-ag/api";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+import Home from "./pages/Home";
+import Swap from "./pages/Swap";
+import Search from "./pages/Search";
+
 import "./App.css";
 
 const SOLANA_MAINNET = "https://mainnet.helius-rpc.com/?api-key=b3cb3faa-2f54-43d8-ba4e-483089666126";
@@ -30,10 +34,14 @@ const App = () => {
   const [inputMint, setInputMint] = useState(validMintAddresses["SOL"]);
   const [outputMint, setOutputMint] = useState("");
   const [amount, setAmount] = useState("");
+  const [activeTab, setActiveTab] = useState("home");
+
+  
+
+
 
   useEffect(() => {
     if (!publicKey) {
-      // Reset sab states
       setWalletAddress(null);
       setTokens([]);
       setTransactions([]);
@@ -43,14 +51,10 @@ const App = () => {
       setOutputMint("");
       setAmount("");
       setError("");
-  
-      // Page scroll back to top
       window.scrollTo(0, 0);
     }
   }, [publicKey]);
-  
 
-  // Setup Jupiter
   useEffect(() => {
     const initJupiterClient = async () => {
       try {
@@ -63,7 +67,6 @@ const App = () => {
     initJupiterClient();
   }, []);
 
-  // Set wallet address and fetch tokens
   useEffect(() => {
     if (publicKey) {
       const addr = publicKey.toString();
@@ -72,6 +75,10 @@ const App = () => {
       fetchTransactions(addr).then(setTransactions);
     }
   }, [publicKey]);
+
+  useEffect(() => {
+    setError(""); // clear error when changing tabs
+  }, [activeTab]);
 
   const fetchTransactions = async (address) => {
     try {
@@ -201,151 +208,121 @@ const App = () => {
     }
   };
 
-  const highestToken = tokens[0];
-  const remainingTokens = tokens.slice(1);
-
   return (
     <div className="container">
       <header className="header">Solana Wallet Tracker (Phantom + Backpack)</header>
-      <div className="content">
-        <div className="wallet-info">
+
+      {!walletAddress ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            position: "relative",
+            zIndex: 10,
+            marginBottom: "20px"
+          }}
+        >
           <WalletMultiButton />
-          {walletAddress && (
-            <div className="wallet-address">
-              <p><strong>Wallet Address:</strong></p>
-              <p>{walletAddress}</p>
+        </div>
+      ) : (
+        <div style={{ display: "flex", height: "100vh" }}>
+          {/* Sidebar */}
+          <div
+            style={{
+              width: "240px",
+              minWidth: "240px",
+              background: "#1e1e2f",
+              color: "#fff",
+              padding: "30px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "25px",
+              height: "100vh",
+              position: "fixed",
+              top: 0,
+              left: 0,
+              zIndex: 1000,
+              boxSizing: "border-box"
+            }}
+          >
+            {/* Wallet Button on Top */}
+            <div style={{ position: "relative", zIndex: 999 }}>
+              <WalletMultiButton />
             </div>
-          )}
-        </div>
 
-        <div className="search-section">
-          <h3>Search for Last 5 Transactions (by Address)</h3>
-          <input
-            type="text"
-            className="search-input"
-            placeholder="Enter wallet address"
-            value={searchedAddress}
-            onChange={(e) => setSearchedAddress(e.target.value)}
-          />
-          <button className="search-btn" onClick={handleSearch}>Search</button>
-        </div>
+            {/* Tabs */}
+            {["home", "swap", "search"].map((tab) => (
+              <div
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  cursor: "pointer",
+                  backgroundColor: activeTab === tab ? "#3f3f5e" : "transparent",
+                  fontWeight: activeTab === tab ? "bold" : "normal",
+                  transition: "background 0.3s"
+                }}
+              >
+                {{
+                  home: "🏠 Home",
+                  swap: "🔁 Swap",
+                  search: "🔍 Search Txns"
+                }[tab]}
+              </div>
+            ))}
+          </div>
 
-        {walletAddress && (
-          <div className="tokens">
-            <table className="tokens-table">
-              <thead>
-                <tr><th>Token Name</th><th>Token Available</th></tr>
-              </thead>
-            </table>
+          {/* Content Area */}
+          <div
+            style={{
+              flex: 1,
+              marginLeft: "240px",
+              height: "100vh",
+              overflowY: "auto",
+              backgroundColor: "#f4f6f8",
+              padding: "40px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column"
+            }}
+          >
+            {/* Wallet address display */}
+            <p><strong>Wallet Address:</strong> {walletAddress}</p>
 
-            {highestToken && (
-              <table className="highlighted-table">
-                <tbody>
-                  <tr>
-                    <td>{highestToken.name}</td>
-                    <td>{highestToken.amount}</td>
-                  </tr>
-                </tbody>
-              </table>
+            {/* Tabs */}
+            {activeTab === "home" && (
+              <Home tokens={tokens} transactions={transactions} walletAddress={walletAddress} />
             )}
 
-            {remainingTokens.length > 0 && (
-              <table className="tokens-table">
-                <tbody>
-                  {remainingTokens.map((token, idx) => (
-                    <tr key={idx}>
-                      <td>{token.name}</td>
-                      <td>{token.amount}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {activeTab === "swap" && (
+              <Swap
+                tokens={tokens}
+                inputMint={inputMint}
+                outputMint={outputMint}
+                amount={amount}
+                setInputMint={setInputMint}
+                setOutputMint={setOutputMint}
+                setAmount={setAmount}
+                handleSwap={handleSwap}
+                error={error}
+                setError={setError}
+              />
+            )}
+
+            {activeTab === "search" && (
+              <Search
+                searchedAddress={searchedAddress}
+                setSearchedAddress={setSearchedAddress}
+                handleSearch={handleSearch}
+                searchedTransactions={searchedTransactions}
+              />
             )}
           </div>
-        )}
-
-        {walletAddress && (
-          <div className="swap-section">
-            <h3>Swap Tokens</h3>
-            <label>Swap From:</label>
-            <select value={inputMint} onChange={(e) => setInputMint(e.target.value)}>
-              {tokens.map((token, i) => (
-                <option key={i} value={token.mint}>
-                  {token.name} ({token.amount})
-                </option>
-              ))}
-            </select>
-
-            <label>Swap To:</label>
-            <select value={outputMint} onChange={(e) => setOutputMint(e.target.value)}>
-              {tokens.filter(t => t.mint !== inputMint).map((token, i) => (
-                <option key={i} value={token.mint}>
-                  {token.name} ({token.amount})
-                </option>
-              ))}
-            </select>
-
-            <label>Amount to Swap:</label>
-            <input
-              type="number"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="Enter amount"
-            />
-            <button className="swap-btn" onClick={handleSwap}>Find Best Swap</button>
-          </div>
-        )}
-
-        {walletAddress && transactions.length > 0 && (
-          <div className="transactions">
-            <h3>Last 5 Transactions for {walletAddress}</h3>
-            <table className="transactions-table">
-              <thead>
-                <tr><th>Hash</th><th>Slot</th><th>Amount (SOL)</th></tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx, i) => (
-                  <tr key={i}>
-                    <td>{tx.transaction.message.recentBlockhash}</td>
-                    <td>{tx.slot}</td>
-                    <td>
-                      {tx.meta?.preBalances[0] && tx.meta?.postBalances[0]
-                        ? ((tx.meta.postBalances[0] - tx.meta.preBalances[0]) / 1e9).toFixed(4)
-                        : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {searchedTransactions.length > 0 && (
-          <div className="transactions">
-            <h3>Last 5 Transactions for {searchedAddress}</h3>
-            <table className="transactions-table">
-              <thead>
-                <tr><th>Hash</th><th>Slot</th><th>Amount (SOL)</th></tr>
-              </thead>
-              <tbody>
-                {searchedTransactions.map((tx, i) => (
-                  <tr key={i}>
-                    <td>{tx.transaction.message.recentBlockhash}</td>
-                    <td>{tx.slot}</td>
-                    <td>
-                      {tx.meta?.preBalances[0] && tx.meta?.postBalances[0]
-                        ? ((tx.meta.postBalances[0] - tx.meta.preBalances[0]) / 1e9).toFixed(4)
-                        : "N/A"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {error && <p className="error">{error}</p>}
-      </div>
+        </div>
+      )}
+      
     </div>
   );
 };
