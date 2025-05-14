@@ -11,13 +11,13 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import Home from "./pages/Home";
 import Swap from "./pages/Swap";
 import Search from "./pages/Search";
+import Delegate from "./pages/Delegate";
 
 import "./App.css";
 
 const SOLANA_MAINNET = "https://mainnet.helius-rpc.com/?api-key=b3cb3faa-2f54-43d8-ba4e-483089666126";
 
 const validMintAddresses = {
-  "SOL": "So11111111111111111111111111111111111111112",
   "USDC": "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A",
   "wETH": "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp"
 };
@@ -31,14 +31,10 @@ const App = () => {
   const [transactions, setTransactions] = useState([]);
   const [searchedTransactions, setSearchedTransactions] = useState([]);
   const [jupiterApiClient, setJupiterApiClient] = useState(null);
-  const [inputMint, setInputMint] = useState(validMintAddresses["SOL"]);
+  const [inputMint, setInputMint] = useState(validMintAddresses["USDC"]);
   const [outputMint, setOutputMint] = useState("");
   const [amount, setAmount] = useState("");
   const [activeTab, setActiveTab] = useState("home");
-
-  
-
-
 
   useEffect(() => {
     if (!publicKey) {
@@ -47,7 +43,7 @@ const App = () => {
       setTransactions([]);
       setSearchedTransactions([]);
       setSearchedAddress("");
-      setInputMint(validMintAddresses["SOL"]);
+      setInputMint(validMintAddresses["USDC"]);
       setOutputMint("");
       setAmount("");
       setError("");
@@ -105,20 +101,23 @@ const App = () => {
   const fetchTokens = async (address) => {
     const connection = new Connection(SOLANA_MAINNET);
     const tokensList = [];
+
     const mintToName = {
-      "So11111111111111111111111111111111111111112": "SOL",
+      "So11111111111111111111111111111111111111112": "SOL", // Native SOL
       "BXXkv6z44iWh4ujtbHn34DtakGDvLodPU7PfuJb9k59A": "USDC",
-      "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp": "wETH",
+      "7vfCXTdGp2sZ8eMrhXzLxLDxF6tfAsaTepT76uXoeNsp": "wETH"
     };
 
     try {
+      // Add native SOL balance manually
       const solBalance = await connection.getBalance(new PublicKey(address));
       tokensList.push({
         name: "SOL",
-        mint: validMintAddresses["SOL"],
+        mint: "So11111111111111111111111111111111111111112",
         amount: (solBalance / 1e9).toFixed(4),
       });
 
+      // Add SPL tokens
       const response = await connection.getParsedTokenAccountsByOwner(
         new PublicKey(address),
         { programId: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA") }
@@ -141,7 +140,8 @@ const App = () => {
       });
 
       for (const [mint, name] of Object.entries(mintToName)) {
-        if (!fetchedMints.includes(mint) && mint !== validMintAddresses["SOL"]) {
+        const isSol = mint === "So11111111111111111111111111111111111111112";
+        if (!fetchedMints.includes(mint) && !isSol) {
           tokensList.push({ name, mint, amount: "0.0000" });
         }
       }
@@ -168,15 +168,14 @@ const App = () => {
 
     try {
       const connection = new Connection(SOLANA_MAINNET);
-      let decimals = 9;
+      let decimals = 6;
 
-      if (inputMint !== validMintAddresses["SOL"]) {
-        const tokenInfo = await connection.getParsedAccountInfo(new PublicKey(inputMint));
-        const tokenData = tokenInfo.value?.data?.parsed?.info;
-        decimals = tokenData?.decimals || 9;
-      }
+      const tokenInfo = await connection.getParsedAccountInfo(new PublicKey(inputMint));
+      const tokenData = tokenInfo.value?.data?.parsed?.info;
+      decimals = tokenData?.decimals || 6;
 
-      const formattedAmount = (parseFloat(amount) * Math.pow(10, decimals)).toString();
+      const formattedAmount = Math.floor(parseFloat(amount) * Math.pow(10, decimals)).toString();
+
       const quote = await jupiterApiClient.quoteGet({
         inputMint,
         outputMint,
@@ -188,9 +187,10 @@ const App = () => {
       if (!routes?.length) return setError("No route found.");
 
       const bestRoute = routes[0];
+
       const { swapTransaction } = await jupiterApiClient.swapPost({
         route: bestRoute,
-        userPublicKey: walletAddress,
+        userPublicKey: new PublicKey(walletAddress),
       });
 
       const tx = Transaction.from(Buffer.from(swapTransaction, "base64"));
@@ -213,46 +213,30 @@ const App = () => {
       <header className="header">Solana Wallet Tracker (Phantom + Backpack)</header>
 
       {!walletAddress ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            position: "relative",
-            zIndex: 10,
-            marginBottom: "20px"
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-start", marginBottom: "20px" }}>
           <WalletMultiButton />
         </div>
       ) : (
         <div style={{ display: "flex", height: "100vh" }}>
           {/* Sidebar */}
-          <div
-            style={{
-              width: "240px",
-              minWidth: "240px",
-              background: "#1e1e2f",
-              color: "#fff",
-              padding: "30px 20px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "25px",
-              height: "100vh",
-              position: "fixed",
-              top: 0,
-              left: 0,
-              zIndex: 1000,
-              boxSizing: "border-box"
-            }}
-          >
-            {/* Wallet Button on Top */}
-            <div style={{ position: "relative", zIndex: 999 }}>
-              <WalletMultiButton />
-            </div>
-
-            {/* Tabs */}
-            {["home", "swap", "search"].map((tab) => (
+          <div style={{
+            width: "240px",
+            minWidth: "240px",
+            background: "#1e1e2f",
+            color: "#fff",
+            padding: "30px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "25px",
+            height: "100vh",
+            position: "fixed",
+            top: 0,
+            left: 0,
+            zIndex: 1000,
+            boxSizing: "border-box"
+          }}>
+            <WalletMultiButton />
+            {["home", "swap", "search", "delegate"].map((tab) => (
               <div
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -268,34 +252,30 @@ const App = () => {
                 {{
                   home: "🏠 Home",
                   swap: "🔁 Swap",
-                  search: "🔍 Search Txns"
+                  search: "🔍 Search Txns",
+                  delegate: "🗳️ Delegate"
                 }[tab]}
               </div>
             ))}
           </div>
 
           {/* Content Area */}
-          <div
-            style={{
-              flex: 1,
-              marginLeft: "240px",
-              height: "100vh",
-              overflowY: "auto",
-              backgroundColor: "#f4f6f8",
-              padding: "40px",
-              boxSizing: "border-box",
-              display: "flex",
-              flexDirection: "column"
-            }}
-          >
-            {/* Wallet address display */}
+          <div style={{
+            flex: 1,
+            marginLeft: "240px",
+            height: "100vh",
+            overflowY: "auto",
+            backgroundColor: "#f4f6f8",
+            padding: "40px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column"
+          }}>
             <p><strong>Wallet Address:</strong> {walletAddress}</p>
 
-            {/* Tabs */}
             {activeTab === "home" && (
               <Home tokens={tokens} transactions={transactions} walletAddress={walletAddress} />
             )}
-
             {activeTab === "swap" && (
               <Swap
                 tokens={tokens}
@@ -310,7 +290,6 @@ const App = () => {
                 setError={setError}
               />
             )}
-
             {activeTab === "search" && (
               <Search
                 searchedAddress={searchedAddress}
@@ -319,10 +298,12 @@ const App = () => {
                 searchedTransactions={searchedTransactions}
               />
             )}
+            {activeTab === "delegate" && (
+              <Delegate />
+            )}
           </div>
         </div>
       )}
-      
     </div>
   );
 };

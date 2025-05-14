@@ -1,3 +1,4 @@
+// pages/Swap.jsx
 import React from "react";
 
 const Swap = ({
@@ -8,22 +9,22 @@ const Swap = ({
   setInputMint,
   setOutputMint,
   setAmount,
-  handleSwap
+  handleSwap,
+  error
 }) => {
   return (
     <div
-  style={{
-    background: "#fff",
-    padding: "30px 40px",
-    borderRadius: "12px",
-    boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
-    boxSizing: "border-box",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "center" // to center content vertically (optional)
-  }}
->
-
+      style={{
+        background: "#fff",
+        padding: "30px 40px",
+        borderRadius: "12px",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center"
+      }}
+    >
       <h2 style={{ fontSize: "20px", fontWeight: "600", marginBottom: "24px" }}>
         🔁 Swap Tokens
       </h2>
@@ -66,6 +67,7 @@ const Swap = ({
               border: "1px solid #ccc"
             }}
           >
+            <option value="">-- Select Token --</option>
             {tokens
               .filter((token) => token.mint !== inputMint)
               .map((token, i) => (
@@ -88,9 +90,17 @@ const Swap = ({
             padding: "10px",
             borderRadius: "8px",
             border: "1px solid #ccc",
-            marginBottom: "20px"
+            marginBottom: "16px"
           }}
         />
+
+        {/* Error Message */}
+        {error && (
+          <div style={{ color: "red", marginBottom: "12px", fontWeight: "500" }}>
+            {error}
+          </div>
+        )}
+
         <button
           onClick={handleSwap}
           style={{
@@ -106,9 +116,7 @@ const Swap = ({
         >
           Find Best Swap
         </button>
-        
       </div>
-      
     </div>
   );
 };
